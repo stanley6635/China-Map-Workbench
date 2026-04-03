@@ -15,8 +15,6 @@
   const DRAG_START_THRESHOLD = 6;
   const DEFAULT_MAP_CENTER = [104.2, 35.8];
   const DEFAULT_MAP_ZOOM = 1;
-  const DEFAULT_ASPECT_SCALE = 1;
-  const FALLBACK_GEO_RATIO = 1.739;
   const STAR_SYMBOL_PATH =
     "path://M512 84L618 374L926 374L676 557L771 848L512 670L253 848L348 557L98 374L406 374Z";
   const COLOR_SWATCHES = buildMarkerColorMatrix();
@@ -141,14 +139,12 @@
     lookupEntries: [],
     labelPinyin: {},
     geoJson: null,
-    geoMetrics: null,
     chart: null,
     chartReady: false,
     citySeq: 0,
     mapView: {
       zoom: DEFAULT_MAP_ZOOM,
       center: [...DEFAULT_MAP_CENTER],
-      aspectScale: DEFAULT_ASPECT_SCALE,
     },
     dragState: {
       pointerDown: false,
@@ -243,60 +239,6 @@
 
   function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
-  }
-
-  function computeGeoMetrics(geoJson) {
-    if (!geoJson?.features?.length) {
-      return {
-        minX: 73.5,
-        maxX: 135.1,
-        minY: 18.1,
-        maxY: 53.6,
-        ratio: FALLBACK_GEO_RATIO,
-      };
-    }
-
-    let minX = Infinity;
-    let maxX = -Infinity;
-    let minY = Infinity;
-    let maxY = -Infinity;
-
-    function visitCoordinates(coordinates) {
-      if (!Array.isArray(coordinates) || !coordinates.length) return;
-      if (typeof coordinates[0] === "number") {
-        const [x, y] = coordinates;
-        if (Number.isFinite(x) && Number.isFinite(y)) {
-          minX = Math.min(minX, x);
-          maxX = Math.max(maxX, x);
-          minY = Math.min(minY, y);
-          maxY = Math.max(maxY, y);
-        }
-        return;
-      }
-      coordinates.forEach(visitCoordinates);
-    }
-
-    geoJson.features.forEach((feature) => {
-      visitCoordinates(feature?.geometry?.coordinates);
-    });
-
-    const width = maxX - minX;
-    const height = maxY - minY;
-    const ratio = width > 0 && height > 0 ? width / height : FALLBACK_GEO_RATIO;
-
-    return {
-      minX,
-      maxX,
-      minY,
-      maxY,
-      ratio,
-    };
-  }
-
-  function syncMapStageAspect() {
-    if (!elements.mapStage) return;
-    const ratio = Number(appState.geoMetrics?.ratio) || FALLBACK_GEO_RATIO;
-    elements.mapStage.style.setProperty("--map-stage-aspect", ratio.toFixed(4));
   }
 
   function hslToHex(h, s, l) {
@@ -601,7 +543,6 @@
       mapView: {
         zoom: appState.mapView.zoom,
         center: appState.mapView.center,
-        aspectScale: appState.mapView.aspectScale,
       },
       selectedCityId: appState.selectedCityId,
       citySeq: appState.citySeq,
@@ -704,7 +645,6 @@
     appState.mapView = {
       zoom: clamp(Number(imported.mapView?.zoom) || DEFAULT_MAP_ZOOM, 1, 8),
       center: importedCenter && importedCenter.every(Number.isFinite) ? importedCenter : [...DEFAULT_MAP_CENTER],
-      aspectScale: DEFAULT_ASPECT_SCALE,
     };
     appState.cities = normalizedCities;
     appState.selectedCityId = selectedCityId;
@@ -1630,7 +1570,6 @@
         right: 24,
         top: 28,
         bottom: 28,
-        aspectScale: appState.mapView.aspectScale,
         label: {
           show: false,
         },
@@ -1875,7 +1814,6 @@
   function resetMapView() {
     appState.mapView.zoom = DEFAULT_MAP_ZOOM;
     appState.mapView.center = [...DEFAULT_MAP_CENTER];
-    appState.mapView.aspectScale = DEFAULT_ASPECT_SCALE;
     renderChart();
     setStatus("视图已重置", "地图缩放与中心位置已恢复默认");
   }
@@ -2328,9 +2266,6 @@
       appState.lookupEntries = cityEntries;
       appState.labelPinyin = labelPinyinData && typeof labelPinyinData === "object" ? labelPinyinData : {};
       appState.geoJson = geoJson;
-      appState.geoMetrics = computeGeoMetrics(geoJson);
-      syncMapStageAspect();
-
       echarts.registerMap("china-workbench", geoJson);
       appState.chart = echarts.init(elements.mapStage, null, {
         renderer: "canvas",
