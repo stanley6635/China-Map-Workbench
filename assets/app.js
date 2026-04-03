@@ -1566,10 +1566,8 @@
           min: 1,
           max: 8,
         },
-        left: 24,
-        right: 24,
-        top: 28,
-        bottom: 28,
+        layoutCenter: ["50%", "50%"],
+        layoutSize: "94%",
         label: {
           show: false,
         },
