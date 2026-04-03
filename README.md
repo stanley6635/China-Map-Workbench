@@ -2,6 +2,10 @@
 
 一个纯前端的中国地图标注小工具，适合把城市清单快速落到地图上，再按需要调整标记样式、导出透明 PNG 用到汇报或 PPT 里。
 
+## 预览
+
+![China Map Workbench screenshot](./assets/readme-screenshot.png)
+
 ## 功能
 
 - 中国地图平面预览，包含省级边界、台湾和海南
