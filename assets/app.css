@@ -294,8 +294,26 @@ textarea {
 
 .city-row-shell {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 8px;
+  align-items: center;
+}
+
+.city-row-check {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.city-row-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 
 .city-row {
@@ -610,7 +628,7 @@ textarea {
 
 .map-stage {
   width: 100%;
-  min-height: clamp(500px, 58vh, 640px);
+  height: auto;
   aspect-ratio: var(--map-stage-aspect, 1.74);
   border: 1px solid var(--line);
   border-radius: 18px;
@@ -795,9 +813,6 @@ textarea {
     grid-template-columns: 1fr;
   }
 
-  .map-stage {
-    min-height: 480px;
-  }
 }
 
 @media (max-width: 720px) {
@@ -834,13 +849,16 @@ textarea {
 
   .button-row,
   .two-up,
-  .city-row-shell,
   .toolbar-actions-block,
   .status-bar {
     flex-direction: column;
   }
 
-  .map-stage {
-    min-height: 420px;
+  .city-row-shell {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .city-row-delete {
+    grid-column: 2;
   }
 }

@@ -16,8 +16,6 @@
   const DEFAULT_MAP_CENTER = [104.2, 35.8];
   const DEFAULT_MAP_ZOOM = 1;
   const DEFAULT_ASPECT_SCALE = 0.78;
-  const MIN_ASPECT_SCALE = 0.72;
-  const MAX_ASPECT_SCALE = 0.92;
   const FALLBACK_GEO_RATIO = 1.739;
   const STAR_SYMBOL_PATH =
     "path://M512 84L618 374L926 374L676 557L771 848L512 670L253 848L348 557L98 374L406 374Z";
@@ -138,6 +136,7 @@
     },
     cities: createSeedCities(),
     selectedCityId: "city-shanghai",
+    bulkSelection: new Set(),
     lookup: new Map(),
     lookupEntries: [],
     labelPinyin: {},
@@ -296,7 +295,7 @@
 
   function syncMapStageAspect() {
     if (!elements.mapStage) return;
-    const ratio = clamp(Number(appState.geoMetrics?.ratio) || FALLBACK_GEO_RATIO, 1.55, 1.9);
+    const ratio = Number(appState.geoMetrics?.ratio) || FALLBACK_GEO_RATIO;
     elements.mapStage.style.setProperty("--map-stage-aspect", ratio.toFixed(4));
   }
 
@@ -705,14 +704,11 @@
     appState.mapView = {
       zoom: clamp(Number(imported.mapView?.zoom) || DEFAULT_MAP_ZOOM, 1, 8),
       center: importedCenter && importedCenter.every(Number.isFinite) ? importedCenter : [...DEFAULT_MAP_CENTER],
-      aspectScale: clamp(
-        Number(imported.mapView?.aspectScale) || DEFAULT_ASPECT_SCALE,
-        MIN_ASPECT_SCALE,
-        MAX_ASPECT_SCALE
-      ),
+      aspectScale: DEFAULT_ASPECT_SCALE,
     };
     appState.cities = normalizedCities;
     appState.selectedCityId = selectedCityId;
+    appState.bulkSelection = new Set();
     syncCitySequence(normalizedCities, imported.citySeq);
 
     renderAll();
@@ -1336,9 +1332,18 @@
     elements.recordList.innerHTML = appState.cities
       .map((record) => {
         const selected = record.id === appState.selectedCityId;
+        const bulkSelected = appState.bulkSelection.has(record.id);
         const chipClass = getMarkerChipClass(record.markerType);
         return `
           <li class="city-row-shell">
+            <label class="city-row-check" aria-label="勾选 ${escapeHtml(getRecordDisplayName(record))} 用于批量样式">
+              <input
+                class="city-row-checkbox"
+                type="checkbox"
+                data-bulk-city-id="${escapeHtml(record.id)}"
+                ${bulkSelected ? "checked" : ""}
+              />
+            </label>
             <button
               class="city-row${selected ? " is-active" : ""}"
               type="button"
@@ -1459,6 +1464,38 @@
     }
 
     renderColorPalette("batch");
+
+    const selectedCount = getBulkSelectionCount();
+    if (elements.bulkStyleHint) {
+      elements.bulkStyleHint.textContent = selectedCount > 0 ? `已勾选 ${selectedCount} 个城市` : "全部城市";
+    }
+    if (elements.bulkStyleApplyBtn) {
+      elements.bulkStyleApplyBtn.textContent = selectedCount > 0 ? "应用到勾选城市" : "应用到全部城市";
+    }
+  }
+
+  function getBulkSelectionCount() {
+    return Array.from(appState.bulkSelection).filter((cityId) =>
+      appState.cities.some((city) => city.id === cityId)
+    ).length;
+  }
+
+  function getBulkTargetIds() {
+    const selectedIds = Array.from(appState.bulkSelection).filter((cityId) =>
+      appState.cities.some((city) => city.id === cityId)
+    );
+    return selectedIds.length ? selectedIds : appState.cities.map((city) => city.id);
+  }
+
+  function setBulkSelection(cityId, checked) {
+    if (!cityId) return;
+    if (checked) {
+      appState.bulkSelection.add(cityId);
+    } else {
+      appState.bulkSelection.delete(cityId);
+    }
+    renderCityList();
+    renderBatchStyleForm();
   }
 
   function resolveCityCoordinate(record, lookup) {
@@ -1905,6 +1942,7 @@
 
     const nextCandidate = appState.cities[index + 1] || appState.cities[index - 1] || null;
     appState.cities = appState.cities.filter((record) => record.id !== cityId);
+    appState.bulkSelection.delete(cityId);
     appState.selectedCityId = nextCandidate?.id || null;
     renderAll();
     setStatus("城市已删除", `${getRecordDisplayName(city)} 已从列表中移除`);
@@ -1923,6 +1961,7 @@
     if (!shouldClear) return;
 
     appState.cities = [];
+    appState.bulkSelection = new Set();
     appState.selectedCityId = null;
     renderAll();
     setStatus("城市列表已清空", "可以重新批量导入或手动新增城市");
@@ -1961,26 +2000,39 @@
       return;
     }
 
+    const targetIds = new Set(getBulkTargetIds());
     const nextMarkerType = normalizeBulkMarkerType(appState.batchStyle.markerType, appState.defaults.markerType);
     const nextColor = String(appState.batchStyle.color || appState.defaults.color).trim() || appState.defaults.color;
     const nextSize = parseOptionalNumber(appState.batchStyle.size) ?? appState.defaults.size;
     const nextGlow = parseOptionalNumber(appState.batchStyle.glow) ?? appState.defaults.glow;
 
-    appState.cities = appState.cities.map((record) => ({
-      ...record,
-      markerType: nextMarkerType,
-      color: nextColor,
-      size: nextSize,
-      glow: nextGlow,
-      label: String(record.name ?? record.label ?? "").trim(),
-    }));
+    appState.cities = appState.cities.map((record) => {
+      if (!targetIds.has(record.id)) return record;
+      return {
+        ...record,
+        markerType: nextMarkerType,
+        color: nextColor,
+        size: nextSize,
+        glow: nextGlow,
+        label: String(record.name ?? record.label ?? "").trim(),
+      };
+    });
 
     renderAll();
-    setStatus("批量样式已应用", `已统一更新 ${appState.cities.length} 个城市的标记样式`);
+    setStatus(
+      "批量样式已应用",
+      `已更新 ${targetIds.size} 个城市的标记样式${getBulkSelectionCount() ? "（按勾选范围）" : "（全部城市）"}`
+    );
   }
 
   function bindEvents() {
     if (elements.recordList) {
+      elements.recordList.addEventListener("change", (event) => {
+        const checkbox = event.target.closest("[data-bulk-city-id]");
+        if (!(checkbox instanceof HTMLInputElement)) return;
+        setBulkSelection(checkbox.dataset.bulkCityId, checkbox.checked);
+      });
+
       elements.recordList.addEventListener("click", (event) => {
         const deleteButton = event.target.closest("[data-delete-city-id]");
         if (deleteButton) {
@@ -2238,6 +2290,7 @@
     elements.bulkStyleApplyBtn = document.getElementById("bulk-style-apply-btn");
     elements.bulkStyleColorPalette = document.getElementById("bulk-style-color-palette");
     elements.bulkStyleColorPreview = document.getElementById("bulk-style-color-preview");
+    elements.bulkStyleHint = document.getElementById("bulk-style-hint");
     elements.deleteCityBtn = document.getElementById("delete-city-btn");
     elements.cityColorPalette = document.getElementById("city-color-palette");
     elements.cityColorPreview = document.getElementById("city-color-preview");
