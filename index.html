@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <title>中国地图城市标注工作台</title>
+    <link rel="stylesheet" href="./assets/app.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="app-header">
+        <div>
+          <p class="eyebrow">China Map Editor</p>
+          <h1>中国地图城市标注工作台</h1>
+        </div>
+        <p class="app-summary">
+          上方专注看图，下方集中编辑。支持城市名自动定位、拖拽微调、配置保存和图片导出。
+        </p>
+      </header>
+
+      <main class="workspace">
+        <section class="map-panel" aria-label="地图预览区">
+          <div class="map-toolbar">
+            <div class="toolbar-block">
+              <div class="toolbar-label">
+                <span>视图</span>
+              </div>
+              <div class="toolbar-actions">
+                <button id="zoom-out-btn" class="ghost-button" type="button">缩小</button>
+                <button id="zoom-in-btn" class="ghost-button" type="button">放大</button>
+                <button id="reset-view-btn" class="ghost-button" type="button">重置视图</button>
+              </div>
+            </div>
+
+            <div class="toolbar-block sliders-block">
+              <label class="range-field">
+                <span>缩放</span>
+                <input id="map-zoom-slider" type="range" min="1" max="8" step="0.1" value="1" />
+                <strong id="map-zoom-value">100%</strong>
+              </label>
+              <label class="range-field compact-field">
+                <span>标签</span>
+                <select id="show-labels-select" name="showLabels">
+                  <option value="true">显示</option>
+                  <option value="false">隐藏</option>
+                </select>
+              </label>
+              <label class="range-field compact-field">
+                <span>语言</span>
+                <select id="label-language-select" name="labelLanguage">
+                  <option value="zh">中文</option>
+                  <option value="en">English</option>
+                </select>
+              </label>
+            </div>
+
+            <details class="compact-menu toolbar-block">
+              <summary>
+                <span>地图配色</span>
+                <strong id="map-theme-name">松烟绿</strong>
+              </summary>
+              <div id="map-theme-palette" class="theme-palette" aria-label="地图主题调色盘"></div>
+            </details>
+
+            <details class="compact-menu toolbar-block">
+              <summary>
+                <span>默认标记</span>
+                <div id="default-color-preview" class="color-preview compact-preview" aria-hidden="true"></div>
+              </summary>
+              <form id="defaults-form" class="tool-form">
+                <div class="tool-form-row">
+                  <label>
+                    <span>类型</span>
+                    <select name="defaultMarkerType">
+                      <option>star</option>
+                      <option>dot</option>
+                      <option>flag</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>大小</span>
+                    <input name="defaultMarkerSize" type="number" value="18" />
+                  </label>
+                  <label>
+                    <span>光晕</span>
+                    <input name="defaultHaloStrength" type="number" value="0.5" step="0.1" />
+                  </label>
+                  <label>
+                    <span>导出倍率</span>
+                    <input name="exportScale" type="number" value="2" />
+                  </label>
+                </div>
+
+                <input name="backgroundColor" type="hidden" value="#E2EAD4" />
+                <input name="defaultMarkerColor" type="hidden" value="#E04F4F" />
+
+                <div class="palette-field compact-palette">
+                  <span>默认颜色</span>
+                  <div
+                    id="default-color-palette"
+                    class="color-palette"
+                    data-color-scope="defaults"
+                    aria-label="默认颜色面板"
+                  ></div>
+                </div>
+              </form>
+            </details>
+
+            <div class="toolbar-block toolbar-actions-block">
+              <button id="save-config-btn" class="primary-button" type="button">保存配置</button>
+              <button id="load-config-btn" class="ghost-button" type="button">载入配置</button>
+              <button id="export-png-btn" class="ghost-button" type="button">导出 PNG</button>
+              <input
+                id="load-config-input"
+                name="configFile"
+                class="file-input"
+                type="file"
+                accept=".json"
+                hidden
+                aria-label="载入配置文件"
+              />
+            </div>
+          </div>
+
+          <div class="map-stage-shell">
+            <div
+              id="map-stage"
+              class="map-stage"
+              aria-label="地图画布容器，显示中国地图、省界与城市标记"
+            ></div>
+            <div id="map-scale" class="map-scale" aria-label="地图比例尺">
+              <div id="map-scale-bar" class="map-scale-bar"></div>
+              <span id="map-scale-label">200 km</span>
+            </div>
+          </div>
+
+          <div class="map-meta-grid" aria-label="地图状态摘要">
+            <article class="map-meta-card">
+              <p>当前主题 / 缩放</p>
+              <strong id="map-source-label">状态驱动渲染</strong>
+            </article>
+            <article class="map-meta-card">
+              <p>选中城市</p>
+              <strong id="selected-city-name">等待选择</strong>
+            </article>
+            <article class="map-meta-card">
+              <p>定位进度</p>
+              <strong id="map-legend-label">实时更新</strong>
+            </article>
+          </div>
+
+          <div id="status-bar" class="status-bar" role="status" aria-live="polite">
+            <span>加载中</span>
+            <span>等待地图和城市记录就绪</span>
+          </div>
+        </section>
+
+        <section class="editor-deck" aria-label="地图编辑区">
+          <section class="section-card">
+            <div class="section-head">
+              <h2>城市列表</h2>
+              <div class="section-head-actions">
+                <button id="clear-all-cities-btn" class="ghost-button danger-button" type="button">清空全部</button>
+                <button id="add-city-header-btn" class="ghost-button" type="button">新增城市</button>
+              </div>
+            </div>
+            <ul id="record-list" class="city-list" aria-label="城市记录列表"></ul>
+          </section>
+
+          <section class="section-card">
+            <div class="section-head">
+              <h2>当前城市</h2>
+              <span id="current-city-hint" class="section-hint">等待选择记录</span>
+            </div>
+
+            <form id="city-form" class="editor-form">
+              <label>
+                <span>城市名</span>
+                <input name="name" type="text" placeholder="例如：上海、义乌、浦东新区" />
+              </label>
+
+              <div class="three-up">
+                <label>
+                  <span>省份</span>
+                  <input name="province" type="text" />
+                </label>
+                <label>
+                  <span>上级城市</span>
+                  <input name="city" type="text" placeholder="例如：金华、上海" />
+                </label>
+                <label>
+                  <span>标记类型</span>
+                  <select name="markerType">
+                    <option>star</option>
+                    <option>dot</option>
+                    <option>flag</option>
+                  </select>
+                </label>
+              </div>
+
+              <div class="editor-grid">
+                <div class="palette-field">
+                  <span>标记颜色</span>
+                  <input name="color" type="hidden" />
+                  <div id="city-color-preview" class="color-preview" aria-hidden="true"></div>
+                  <div
+                    id="city-color-palette"
+                    class="color-palette"
+                    data-color-scope="city"
+                    aria-label="当前城市颜色面板"
+                  ></div>
+                </div>
+
+                <div class="stack-fields">
+                  <div class="three-up stat-fields">
+                    <label>
+                      <span>大小</span>
+                      <input name="size" type="number" />
+                    </label>
+                    <label>
+                      <span>光晕</span>
+                      <input name="glow" type="number" step="0.1" />
+                    </label>
+                    <label>
+                      <span>锁定</span>
+                      <select name="locked">
+                        <option>否</option>
+                        <option>是</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div class="two-up">
+                    <label>
+                      <span>经度</span>
+                      <input name="longitude" type="text" />
+                    </label>
+                    <label>
+                      <span>纬度</span>
+                      <input name="latitude" type="text" />
+                    </label>
+                  </div>
+
+                  <div class="two-up">
+                    <label>
+                      <span>水平偏移</span>
+                      <input name="offsetX" type="text" />
+                    </label>
+                    <label>
+                      <span>垂直偏移</span>
+                      <input name="offsetY" type="text" />
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <label>
+                <span>备注</span>
+                <textarea name="notes" rows="3" placeholder="记录人工修正、特殊说明等"></textarea>
+              </label>
+
+              <div class="form-actions">
+                <button id="delete-city-btn" class="ghost-button danger-button" type="button">删除当前城市</button>
+              </div>
+            </form>
+          </section>
+
+          <div class="editor-stack">
+            <section class="section-card">
+              <div class="section-head">
+                <h2>批量导入</h2>
+                <span class="section-hint">一行一个</span>
+              </div>
+
+              <textarea
+                id="bulk-input"
+                name="bulkInput"
+                class="bulk-input"
+                rows="8"
+                spellcheck="false"
+                placeholder="一行一个城市名，例如：&#10;北京&#10;上海&#10;义乌&#10;浦东新区"
+              >北京
+上海
+义乌
+浦东新区</textarea>
+
+              <p class="helper-copy">一行一个城市名，省份、上级城市、经纬度和默认标记会自动匹配。</p>
+
+              <div class="button-row">
+                <button id="bulk-import-btn" class="primary-button" type="button">导入城市</button>
+                <button id="bulk-clear-btn" class="ghost-button" type="button">清空文本</button>
+              </div>
+            </section>
+
+            <section class="section-card">
+              <div class="section-head">
+                <h2>批量样式</h2>
+                <span class="section-hint">全部城市</span>
+              </div>
+
+              <form id="bulk-style-form" class="tool-form">
+                <div class="three-up">
+                  <label>
+                    <span>类型</span>
+                    <select name="markerType">
+                      <option>star</option>
+                      <option>dot</option>
+                      <option>flag</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>大小</span>
+                    <input name="size" type="number" value="18" />
+                  </label>
+                  <label>
+                    <span>光晕</span>
+                    <input name="glow" type="number" value="0.5" step="0.1" />
+                  </label>
+                </div>
+
+                <input name="color" type="hidden" value="#E04F4F" />
+
+                <div class="palette-field compact-palette">
+                  <span>颜色</span>
+                  <div id="bulk-style-color-preview" class="color-preview compact-preview" aria-hidden="true"></div>
+                  <div
+                    id="bulk-style-color-palette"
+                    class="color-palette"
+                    data-color-scope="batch"
+                    aria-label="批量样式颜色面板"
+                  ></div>
+                </div>
+
+                <button id="bulk-style-apply-btn" class="ghost-button" type="button">应用到全部城市</button>
+              </form>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="./assets/vendor/echarts.min.js"></script>
+    <script src="./assets/data/china.data.js"></script>
+    <script src="./assets/data/cities.data.js"></script>
+    <script src="./assets/data/city-labels-pinyin.data.js"></script>
+    <script src="./assets/app.js"></script>
+  </body>
+</html>
